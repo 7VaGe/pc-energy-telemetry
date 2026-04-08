@@ -6,8 +6,7 @@
 import time
 import logging
 from prometheus_client import start_http_server, REGISTRY
-from collectors import gpu, cpu, ram, storage
-from collectors import energy, llm_stats
+from collectors import gpu, cpu, ram, storage, energy, llm_stats, hardware_profile
 import classifier
 
 logging.basicConfig(
@@ -33,6 +32,10 @@ def main():
     gpu.init()
     log.info("GPU handle acquired.")
 
+    log.info("Detecting hardware profile and computing baseline power...")
+    baseline = hardware_profile.init()
+    log.info(f"System baseline power: {baseline:.1f}W")
+
     log.info(f"Starting HTTP server on port {EXPORTER_PORT}...")
     start_http_server(EXPORTER_PORT)
     log.info(f"Exporter running at http://localhost:{EXPORTER_PORT}/metrics")
@@ -40,32 +43,26 @@ def main():
     log.info("Entering metric collection loop...")
     while True:
         try:
-            # Collect hardware metrics from each subsystem
             gpu.collect()
             cpu.collect()
             ram.collect()
             storage.collect()
 
-            # Classify current workload
-            gpu_pct  = get_metric_value('gpu_utilization_percent')
-            session  = classifier.collect(gpu_pct)
+            gpu_pct     = get_metric_value('gpu_utilization_percent')
+            session     = classifier.collect(gpu_pct)
 
-            # Read current power estimates for energy accounting
             gpu_power_w = get_metric_value('gpu_power_watts_estimated')
             cpu_power_w = get_metric_value('cpu_power_watts_estimated')
 
-            # Compute energy consumption and cost
             energy.collect(
-                session    = session,
+                session     = session,
                 gpu_power_w = gpu_power_w,
                 cpu_power_w = cpu_power_w,
             )
 
-            # Read active tariff price for LLM cost calculation
             price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
+            total_power_w = get_metric_value('power_total_watts_estimated')
 
-            # Collect LLM inference statistics (only active during llm sessions)
-            total_power_w = gpu_power_w + cpu_power_w
             llm_stats.collect(
                 power_w       = total_power_w,
                 price_eur_kwh = price_eur_kwh,
