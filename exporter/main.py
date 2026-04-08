@@ -6,7 +6,7 @@
 import time
 import logging
 from prometheus_client import start_http_server, REGISTRY
-from collectors import gpu, cpu, ram, storage, energy, llm_stats, hardware_profile
+from collectors import gpu, cpu, ram, storage, energy, llm_stats, hardware_profile, llm_proxy, gaming_session
 import classifier
 
 logging.basicConfig(
@@ -36,6 +36,10 @@ def main():
     baseline = hardware_profile.init()
     log.info(f"System baseline power: {baseline:.1f}W")
 
+    log.info(f"Starting LLM proxy on port {llm_proxy.PROXY_PORT}...")
+    llm_proxy.start()
+    log.info(f"LLM proxy active on http://localhost:{llm_proxy.PROXY_PORT}")
+
     log.info(f"Starting HTTP server on port {EXPORTER_PORT}...")
     start_http_server(EXPORTER_PORT)
     log.info(f"Exporter running at http://localhost:{EXPORTER_PORT}/metrics")
@@ -43,26 +47,39 @@ def main():
     log.info("Entering metric collection loop...")
     while True:
         try:
+            # 1 — Collect hardware metrics
             gpu.collect()
             cpu.collect()
             ram.collect()
             storage.collect()
 
+            # 2 — Classify session
             gpu_pct     = get_metric_value('gpu_utilization_percent')
             session     = classifier.collect(gpu_pct)
 
+            # 3 — Read power estimates
             gpu_power_w = get_metric_value('gpu_power_watts_estimated')
             cpu_power_w = get_metric_value('cpu_power_watts_estimated')
 
+            # 4 — Compute energy and cost (writes power_total and price metrics)
             energy.collect(
                 session     = session,
                 gpu_power_w = gpu_power_w,
                 cpu_power_w = cpu_power_w,
             )
 
+            # 5 — Read derived values after energy.collect() has written them
             price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
             total_power_w = get_metric_value('power_total_watts_estimated')
 
+            # 6 — Update proxy and gaming session with current power
+            llm_proxy.update_power(total_power_w, price_eur_kwh)
+            gaming_session.collect(
+                power_w       = total_power_w,
+                price_eur_kwh = price_eur_kwh,
+            )
+
+            # 7 — LLM stats probe (legacy, kept for non-proxy fallback)
             llm_stats.collect(
                 power_w       = total_power_w,
                 price_eur_kwh = price_eur_kwh,
