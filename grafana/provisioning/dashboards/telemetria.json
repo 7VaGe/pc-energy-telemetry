@@ -535,7 +535,313 @@
       ],
       "title": "LLM Server Status",
       "type": "stat"
+    },
+{
+  "collapsed": false,
+  "gridPos": { "h": 1, "w": 24, "x": 0, "y": 91 },
+  "id": 26,
+  "title": "LLM Session Tracking",
+  "type": "row"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": {
+      "color": { "mode": "thresholds" },
+      "thresholds": { "mode": "absolute", "steps": [
+        { "color": "red", "value": null },
+        { "color": "green", "value": 1 }
+      ]}
+    },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 0, "y": 92 },
+  "id": 27,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "value_and_name" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_session_active",
+      "legendFormat": "Session active"
     }
+  ],
+  "title": "LLM Session Status",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "none" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 6, "y": 92 },
+  "id": 28,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_session_request_count",
+      "legendFormat": "Requests"
+    }
+  ],
+  "title": "Requests in session",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "none" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 12, "y": 92 },
+  "id": 29,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_session_tokens_total",
+      "legendFormat": "Tokens"
+    }
+  ],
+  "title": "Tokens in session",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 18, "y": 92 },
+  "id": 30,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_session_duration_s",
+      "legendFormat": "Duration"
+    }
+  ],
+  "title": "Session duration",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyEUR" },
+    "overrides": []
+  },
+  "gridPos": { "h": 6, "w": 12, "x": 0, "y": 96 },
+  "id": 31,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_session_cost_euro",
+      "legendFormat": "Session cost (€)"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "llm_sessions_cost_euro_completed_total",
+      "legendFormat": "All sessions total (€)"
+    }
+  ],
+  "title": "LLM Session Cost (€)",
+  "type": "stat"
+},
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "none", "min": 0 },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 96 },
+      "id": 32,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "llm_last_request_tokens",
+          "legendFormat": "Tokens"
+        }
+      ],
+      "title": "Last request tokens",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "none", "min": 0 },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 96 },
+      "id": 39,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "llm_last_request_tokens_per_second",
+          "legendFormat": "tokens/s"
+        }
+      ],
+      "title": "Last request tokens/s",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s", "min": 0 },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 102 },
+      "id": 40,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "llm_last_request_latency_s",
+          "legendFormat": "Latency (s)"
+        }
+      ],
+      "title": "Last request latency",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyEUR", "min": 0 },
+        "overrides": []
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 102 },
+      "id": 41,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "llm_last_request_cost_euro",
+          "legendFormat": "Cost (€)"
+        }
+      ],
+      "title": "Last request cost",
+      "type": "stat"
+    },
+{
+  "collapsed": false,
+  "gridPos": { "h": 1, "w": 24, "x": 0, "y": 102 },
+  "id": 33,
+  "title": "Gaming Session Tracking",
+  "type": "row"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": {
+      "color": { "mode": "thresholds" },
+      "thresholds": { "mode": "absolute", "steps": [
+        { "color": "green", "value": null },
+        { "color": "orange", "value": 1 }
+      ]}
+    },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 0, "y": 103 },
+  "id": 34,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "value_and_name" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_session_active",
+      "legendFormat": "Gaming active"
+    }
+  ],
+  "title": "Gaming Session Status",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 6, "y": 103 },
+  "id": 35,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_session_duration_s",
+      "legendFormat": "Duration (s)"
+    }
+  ],
+  "title": "Gaming Session Duration",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "currencyEUR" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 12, "y": 103 },
+  "id": 36,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_session_cost_euro",
+      "legendFormat": "Current session (€)"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_sessions_cost_euro_total",
+      "legendFormat": "All sessions (€)"
+    }
+  ],
+  "title": "Gaming Session Cost (€)",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "none" },
+    "overrides": []
+  },
+  "gridPos": { "h": 4, "w": 6, "x": 18, "y": 103 },
+  "id": 37,
+  "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_sessions_completed_total",
+      "legendFormat": "Completed sessions"
+    }
+  ],
+  "title": "Total Gaming Sessions",
+  "type": "stat"
+},
+{
+  "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+  "fieldConfig": {
+    "defaults": { "color": { "mode": "palette-classic" }, "unit": "watt", "min": 0 },
+    "overrides": []
+  },
+  "gridPos": { "h": 8, "w": 24, "x": 0, "y": 107 },
+  "id": 38,
+  "targets": [
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_session_energy_kwh * 1000",
+      "legendFormat": "Gaming session energy (Wh)"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "expr": "gaming_sessions_energy_kwh_total * 1000",
+      "legendFormat": "All sessions total energy (Wh)"
+    }
+  ],
+  "title": "Gaming Session Energy (Wh)",
+  "type": "timeseries"
+}
   ],
   "refresh": "5s",
   "schemaVersion": 39,
