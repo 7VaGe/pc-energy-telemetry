@@ -7,9 +7,9 @@ import time
 import logging
 from prometheus_client import start_http_server, REGISTRY
 from collectors import gpu, cpu, ram, storage
+from collectors import energy, llm_stats
 import classifier
 
-# Configure structured logging with timestamps
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -17,26 +17,22 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Exporter configuration
-EXPORTER_PORT   = 8000   # Port exposed to Prometheus scraper
-SCRAPE_INTERVAL = 2      # Collection frequency in seconds
+EXPORTER_PORT   = 8000
+SCRAPE_INTERVAL = 2
 
-def get_gpu_utilization() -> float:
-    # Read the current GPU utilization from the Prometheus registry.
-    # Used as input signal for session classification.
+def get_metric_value(metric_name: str) -> float:
+    # Read current value of a named gauge from the Prometheus registry.
     for metric in REGISTRY.collect():
-        if metric.name == 'gpu_utilization_percent':
+        if metric.name == metric_name:
             for sample in metric.samples:
                 return sample.value
     return 0.0
 
 def main():
-    # Initialize NVML handle before entering the collection loop
     log.info("Initializing GPU handle via NVML...")
     gpu.init()
     log.info("GPU handle acquired.")
 
-    # Start the HTTP server that exposes /metrics to Prometheus
     log.info(f"Starting HTTP server on port {EXPORTER_PORT}...")
     start_http_server(EXPORTER_PORT)
     log.info(f"Exporter running at http://localhost:{EXPORTER_PORT}/metrics")
@@ -50,13 +46,37 @@ def main():
             ram.collect()
             storage.collect()
 
-            # Classify current workload based on active processes and GPU load
-            gpu_pct = get_gpu_utilization()
-            session = classifier.collect(gpu_pct)
+            # Classify current workload
+            gpu_pct  = get_metric_value('gpu_utilization_percent')
+            session  = classifier.collect(gpu_pct)
+
+            # Read current power estimates for energy accounting
+            gpu_power_w = get_metric_value('gpu_power_watts_estimated')
+            cpu_power_w = get_metric_value('cpu_power_watts_estimated')
+
+            # Compute energy consumption and cost
+            energy.collect(
+                session    = session,
+                gpu_power_w = gpu_power_w,
+                cpu_power_w = cpu_power_w,
+            )
+
+            # Read active tariff price for LLM cost calculation
+            price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
+
+            # Collect LLM inference statistics (only active during llm sessions)
+            total_power_w = gpu_power_w + cpu_power_w
+            llm_stats.collect(
+                power_w       = total_power_w,
+                price_eur_kwh = price_eur_kwh,
+                session       = session,
+            )
 
             log.info(
                 f"session: {session:6s} | "
-                f"gpu_util: {gpu_pct:.1f}% | "
+                f"gpu: {gpu_pct:.1f}% | "
+                f"power: {total_power_w:.1f}W | "
+                f"tariff: F{int(get_metric_value('energy_tariff_active'))} | "
                 f"collectors: OK"
             )
 
