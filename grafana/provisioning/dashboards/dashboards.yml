@@ -1,0 +1,13 @@
+# Grafana dashboard provisioning configuration.
+# Instructs Grafana to load dashboard JSON files from the local folder.
+
+apiVersion: 1
+
+providers:
+  - name: 'telemetria'
+    orgId: 1
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards
