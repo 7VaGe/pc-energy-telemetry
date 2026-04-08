@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+
+# Telemetria PC — dati runtime
+prometheus_data/
+grafana_data/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
