@@ -9,11 +9,18 @@
 # This represents the energy cost of generating a single token at the
 # current power draw and active tariff band.
 
+import time
 import requests
 import logging
 from prometheus_client import Gauge
 
 log = logging.getLogger(__name__)
+
+# Throttle: probe inference at most once every 60 seconds.
+# llm_proxy.py handles real-time per-request stats; this module
+# does periodic sampling only (tokens/s benchmark, TTFT, etc.)
+PROBE_INTERVAL_S  = 60
+_last_probe_time  = 0.0
 
 LM_STUDIO_BASE_URL  = 'http://localhost:1234'
 LM_STUDIO_STATS_EP  = f'{LM_STUDIO_BASE_URL}/api/v0/chat/completions'
@@ -56,7 +63,7 @@ def _probe_inference(model_id: str) -> dict:
         'max_tokens': 3,
         'stream':     False,
     }
-    r = requests.post(LM_STUDIO_STATS_EP, json=payload, timeout=15)
+    r = requests.post(LM_STUDIO_STATS_EP, json=payload, timeout=10)
     return r.json()
 
 def collect(power_w: float, price_eur_kwh: float, session: str):
@@ -64,12 +71,18 @@ def collect(power_w: float, price_eur_kwh: float, session: str):
     # price_eur_kwh:  active tariff price (EUR/kWh)
     # session:        current session type
 
-    global _last_stats
+    global _last_stats, _last_probe_time
 
     # Only probe LM Studio when session is classified as LLM
     if session != 'llm':
         llm_server_available.set(0)
         return
+
+    # Throttle: skip probe if called too soon since last run
+    now = time.monotonic()
+    if now - _last_probe_time < PROBE_INTERVAL_S:
+        return
+    _last_probe_time = now
 
     try:
         model_id = _get_active_model()
