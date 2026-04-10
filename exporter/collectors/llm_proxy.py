@@ -34,7 +34,7 @@ llm_last_latency          = Gauge('llm_last_request_latency_s',   'Latency of la
 llm_last_request_cost     = Gauge('llm_last_request_cost_euro',   'Cost of last request (EUR)')
 llm_total_historical_cost = Counter('llm_total_energy_cost_euro', 'Total historical LLM energy cost (EUR)')
 
-# Lock unico â€” protegge TUTTE le variabili di stato condivise
+# Lock unico Ã¢â‚¬â€ protegge TUTTE le variabili di stato condivise
 _lock = threading.Lock()
 
 _power_w            = 0.0
