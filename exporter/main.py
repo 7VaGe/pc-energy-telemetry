@@ -1,7 +1,5 @@
 # main.py
 # Entry point for the hardware telemetry exporter.
-# Initializes collectors, starts the Prometheus HTTP server,
-# and runs the metric collection loop at a fixed scrape interval.
 
 import time
 import logging
@@ -19,13 +17,14 @@ log = logging.getLogger(__name__)
 EXPORTER_PORT   = 8000
 SCRAPE_INTERVAL = 2
 
+
 def get_metric_value(metric_name: str) -> float:
-    # Read current value of a named gauge from the Prometheus registry.
     for metric in REGISTRY.collect():
         if metric.name == metric_name:
             for sample in metric.samples:
                 return sample.value
     return 0.0
+
 
 def main():
     log.info("Initializing GPU handle via NVML...")
@@ -47,48 +46,36 @@ def main():
     log.info("Entering metric collection loop...")
     while True:
         try:
-            # 1 — Collect hardware metrics
+            # 1 Ã¢â‚¬â€ Hardware metrics
             gpu.collect()
             cpu.collect()
             ram.collect()
             storage.collect()
 
-            # 2 — Classify session
-            gpu_pct     = get_metric_value('gpu_utilization_percent')
-            session     = classifier.collect(gpu_pct)
+            # 2 Ã¢â‚¬â€ Classify session (una sola scansione processi, ritorna anche game)
+            gpu_pct       = get_metric_value('gpu_utilization_percent')
+            session, game = classifier.collect(gpu_pct)
 
-            # 3 — Read power estimates
+            # 3 Ã¢â‚¬â€ Power estimates
             gpu_power_w = get_metric_value('gpu_power_watts_estimated')
             cpu_power_w = get_metric_value('cpu_power_watts_estimated')
 
-            # 4 — Compute energy and cost (writes power_total and price metrics)
-            energy.collect(
-                session     = session,
-                gpu_power_w = gpu_power_w,
-                cpu_power_w = cpu_power_w,
-            )
+            # 4 Ã¢â‚¬â€ Energy and cost
+            energy.collect(session=session, gpu_power_w=gpu_power_w, cpu_power_w=cpu_power_w)
 
-            # 5 — Read derived values after energy.collect() has written them
+            # 5 Ã¢â‚¬â€ Derived values after energy.collect()
             price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
             total_power_w = get_metric_value('power_total_watts_estimated')
 
-            # 6 — Update proxy and gaming session with current power
+            # 6 Ã¢â‚¬â€ Proxy and gaming session
             llm_proxy.update_power(total_power_w, price_eur_kwh)
-            gaming_session.collect(
-                power_w       = total_power_w,
-                price_eur_kwh = price_eur_kwh,
-            )
+            gaming_session.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, game=game)
 
-            # 7 — LLM stats probe (legacy, kept for non-proxy fallback)
-            llm_stats.collect(
-                power_w       = total_power_w,
-                price_eur_kwh = price_eur_kwh,
-                session       = session,
-            )
+            # 7 Ã¢â‚¬â€ LLM stats probe (legacy, throttled a 60s)
+            llm_stats.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, session=session)
 
             log.info(
-                f"session: {session:6s} | "
-                f"gpu: {gpu_pct:.1f}% | "
+                f"session: {session:6s} | gpu: {gpu_pct:.1f}% | "
                 f"power: {total_power_w:.1f}W | "
                 f"tariff: F{int(get_metric_value('energy_tariff_active'))} | "
                 f"collectors: OK"
@@ -98,6 +85,7 @@ def main():
             log.error(f"Collection error: {e}")
 
         time.sleep(SCRAPE_INTERVAL)
+
 
 if __name__ == '__main__':
     main()
