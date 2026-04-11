@@ -17,9 +17,8 @@ log = logging.getLogger(__name__)
 
 EXPORTER_PORT   = 8000
 SCRAPE_INTERVAL = 2
-LLM_STATS_INTERVAL = 5  # Fetch API stats every 5 cycles (~10 seconds)
+LLM_STATS_INTERVAL = 5
 
-# --- LLM Discovery Prometheus Metrics ---
 LLM_ENGINE_INFO = Gauge(
     'llm_engine_info',
     'Active LLM runtime engine (1=running)',
@@ -41,8 +40,11 @@ def get_metric_value(metric_name: str) -> float:
 
 def main():
     log.info("Initializing GPU handle via NVML...")
-    gpu.init()
-    log.info("GPU handle acquired.")
+    energy_counter_ok = gpu.init()
+    if energy_counter_ok:
+        log.info("GPU handle acquired. Power method: energy counter (nvmlDeviceGetTotalEnergyConsumption).")
+    else:
+        log.warning("GPU handle acquired. Power method: TDP*utilization estimate (energy counter not supported).")
 
     log.info("Detecting hardware profile and computing baseline power...")
     baseline = hardware_profile.init()
@@ -63,35 +65,28 @@ def main():
 
     while True:
         try:
-            # 1 – Hardware metrics (every 2s)
             gpu.collect()
             cpu.collect()
             ram.collect()
             storage.collect()
 
-            # 2 – Classify session (every 2s, fast psutil scan)
             gpu_pct       = get_metric_value('gpu_utilization_percent')
             session, game = classifier.collect(gpu_pct)
 
-            # 3 – Power estimates
-            gpu_power_w = get_metric_value('gpu_power_watts_estimated')
+            gpu_power_w = gpu.get_power_w()
             cpu_power_w = get_metric_value('cpu_power_watts_estimated')
 
-            # 4 – Energy and cost
             energy.collect(session=session, gpu_power_w=gpu_power_w, cpu_power_w=cpu_power_w)
 
-            # 5 – Derived values after energy.collect()
             price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
             total_power_w = get_metric_value('power_total_watts_estimated')
 
-            # 6 – Proxy and gaming session
             llm_proxy.update_power(total_power_w, price_eur_kwh)
             gaming_session.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, game=game)
 
-            # 7 – LLM stats probe (legacy, throttled)
             llm_stats.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, session=session)
 
-            # 8 – Dynamic LLM Discovery & Stats (Fast scan for processes)
+            # LLM Discovery - fast scan
             active_providers = discover_active_llms()
             current_engines = set()
 
@@ -99,29 +94,38 @@ def main():
                 engine = provider.ENGINE_NAME
                 current_engines.add(engine)
 
-                # Immediately mark engine as running with last known model (fast, no API call)
-                # We update the model name and stats only every N cycles (slow poll)
                 if engine not in discovered_engines_cache:
                     log.info(f"New LLM engine detected: {engine}. Forcing stats refresh.")
                     cycle_counter = LLM_STATS_INTERVAL
 
-                # Set process as alive (1)
+                cached_model = discovered_engines_cache.get(engine, {}).get('model', 'unknown')
+                cached_port = discovered_engines_cache.get(engine, {}).get('port', str(provider.port))
                 LLM_ENGINE_INFO.labels(
                     engine=engine,
-                    model=discovered_engines_cache.get(engine, {}).get('model', 'unknown'),
-                    port=str(provider.port)
+                    model=cached_model,
+                    port=cached_port
                 ).set(1)
 
-            # Remove engines that are no longer running (process died)
+            # Cleanup terminated engines
             for old_engine in list(discovered_engines_cache.keys()):
                 if old_engine not in current_engines:
-                    LLM_ENGINE_INFO.remove(old_engine)
-                    LLM_VRAM_BYTES.remove(old_engine)
+                    cached = discovered_engines_cache[old_engine]
+                    try:
+                        LLM_ENGINE_INFO.remove(
+                            old_engine,
+                            cached.get('model', 'unknown'),
+                            cached.get('port', '')
+                        )
+                    except KeyError:
+                        pass
+                    try:
+                        LLM_VRAM_BYTES.remove(old_engine)
+                    except KeyError:
+                        pass
                     log.info(f"LLM Engine '{old_engine}' terminated. Metrics cleared.")
                     del discovered_engines_cache[old_engine]
 
-            # 9 – LLM API Stats Update (Slow poll, every 10s)
-            # This queries Ollama / LM Studio APIs for detailed info (model name, vram)
+            # LLM API stats - slow poll every ~10s
             cycle_counter += 1
             if cycle_counter >= LLM_STATS_INTERVAL:
                 cycle_counter = 0
@@ -131,8 +135,18 @@ def main():
                         model_name = provider.get_active_model() or "unknown"
                         stats = provider.get_stats()
 
-                        # Update cache
-                        discovered_engines_cache[engine] = {'model': model_name}
+                        old_model = discovered_engines_cache.get(engine, {}).get('model', 'unknown')
+                        old_port = discovered_engines_cache.get(engine, {}).get('port', '')
+                        if old_model != model_name or old_port != str(provider.port):
+                            try:
+                                LLM_ENGINE_INFO.remove(engine, old_model, old_port)
+                            except KeyError:
+                                pass
+
+                        discovered_engines_cache[engine] = {
+                            'model': model_name,
+                            'port': str(provider.port)
+                        }
 
                         LLM_ENGINE_INFO.labels(
                             engine=engine,
