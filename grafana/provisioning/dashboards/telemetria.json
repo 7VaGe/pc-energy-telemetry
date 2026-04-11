@@ -36,11 +36,96 @@
           "min": 0,
           "max": 360
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Best available (W)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Energy counter (W)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TDP\u00d7util estimate (W)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    8,
+                    4
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TDP ceiling (W)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    4,
+                    4
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 16,
         "x": 0,
         "y": 1
       },
@@ -49,9 +134,10 @@
         "legend": {
           "calcs": [
             "mean",
-            "max"
+            "max",
+            "last"
           ],
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom"
         },
         "tooltip": {
@@ -64,8 +150,24 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "expr": "gpu_power_watts",
+          "legendFormat": "Best available (W)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "gpu_power_watts_measured",
+          "legendFormat": "Energy counter (W)"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "gpu_power_watts_estimated",
-          "legendFormat": "GPU Power (W)"
+          "legendFormat": "TDP\u00d7util estimate (W)"
         },
         {
           "datasource": {
@@ -73,11 +175,85 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "gpu_power_limit_watts",
-          "legendFormat": "TDP limit (W)"
+          "legendFormat": "TDP ceiling (W)"
         }
       ],
-      "title": "GPU Power (estimated vs TDP)",
+      "title": "GPU Power \u2014 measured vs estimated",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "TDP estimate",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "Energy counter",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 42,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
+          "expr": "gpu_power_measurement_method",
+          "legendFormat": "Power method"
+        }
+      ],
+      "title": "GPU Power Method",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -145,7 +321,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "gpu_temperature_c",
-          "legendFormat": "GPU Temperature (°C)"
+          "legendFormat": "GPU Temperature (\u00b0C)"
         }
       ],
       "title": "GPU Temperature",
@@ -594,13 +770,13 @@
             {
               "options": {
                 "1": {
-                  "text": "F1 peak 0.28€/kWh"
+                  "text": "F1 peak 0.28\u20ac/kWh"
                 },
                 "2": {
-                  "text": "F2 mid 0.22€/kWh"
+                  "text": "F2 mid 0.22\u20ac/kWh"
                 },
                 "3": {
-                  "text": "F3 off 0.16€/kWh"
+                  "text": "F3 off 0.16\u20ac/kWh"
                 }
               },
               "type": "value"
@@ -684,7 +860,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "cost_euro_total_total",
-          "legendFormat": "Costo totale (€)"
+          "legendFormat": "Costo totale (\u20ac)"
         },
         {
           "datasource": {
@@ -692,7 +868,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "cost_euro_gaming_total",
-          "legendFormat": "Costo gaming (€)"
+          "legendFormat": "Costo gaming (\u20ac)"
         },
         {
           "datasource": {
@@ -700,7 +876,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "cost_euro_llm_total",
-          "legendFormat": "Costo LLM (€)"
+          "legendFormat": "Costo LLM (\u20ac)"
         },
         {
           "datasource": {
@@ -708,10 +884,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "cost_euro_idle_total",
-          "legendFormat": "Costo idle (€)"
+          "legendFormat": "Costo idle (\u20ac)"
         }
       ],
-      "title": "Costo energetico cumulativo per sessione (€)",
+      "title": "Costo energetico cumulativo per sessione (\u20ac)",
       "type": "timeseries"
     },
     {
@@ -859,10 +1035,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "llm_cost_per_token_euro",
-          "legendFormat": "€/token"
+          "legendFormat": "\u20ac/token"
         }
       ],
-      "title": "Costo per token (€)",
+      "title": "Costo per token (\u20ac)",
       "type": "stat"
     },
     {
@@ -920,10 +1096,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "llm_cost_per_1k_tokens_euro",
-          "legendFormat": "€/1000 token"
+          "legendFormat": "\u20ac/1000 token"
         }
       ],
-      "title": "Costo per 1000 token (€)",
+      "title": "Costo per 1000 token (\u20ac)",
       "type": "stat"
     },
     {
@@ -1222,7 +1398,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "llm_session_cost_euro",
-          "legendFormat": "Session cost (€)"
+          "legendFormat": "Session cost (\u20ac)"
         },
         {
           "datasource": {
@@ -1230,10 +1406,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "llm_sessions_cost_euro_completed_total",
-          "legendFormat": "All sessions total (€)"
+          "legendFormat": "All sessions total (\u20ac)"
         }
       ],
-      "title": "LLM Session Cost (€)",
+      "title": "LLM Session Cost (\u20ac)",
       "type": "stat"
     },
     {
@@ -1406,7 +1582,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "llm_last_request_cost_euro",
-          "legendFormat": "Cost (€)"
+          "legendFormat": "Cost (\u20ac)"
         }
       ],
       "title": "Last request cost",
@@ -1559,7 +1735,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "gaming_session_cost_euro",
-          "legendFormat": "Current session (€)"
+          "legendFormat": "Current session (\u20ac)"
         },
         {
           "datasource": {
@@ -1567,10 +1743,10 @@
             "uid": "PBFA97CFB590B2093"
           },
           "expr": "gaming_sessions_cost_euro_total",
-          "legendFormat": "All sessions (€)"
+          "legendFormat": "All sessions (\u20ac)"
         }
       ],
-      "title": "Gaming Session Cost (€)",
+      "title": "Gaming Session Cost (\u20ac)",
       "type": "stat"
     },
     {
