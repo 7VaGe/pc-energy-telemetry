@@ -3,7 +3,7 @@
 
 import time
 import logging
-from prometheus_client import start_http_server, REGISTRY, Gauge
+from prometheus_client import start_http_server, Gauge
 from collectors import gpu, cpu, ram, storage, energy, llm_stats, hardware_profile, llm_proxy, gaming_session
 from collectors.llm_discovery import discover_active_llms
 import classifier
@@ -15,8 +15,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-EXPORTER_PORT   = 8000
-SCRAPE_INTERVAL = 2
+EXPORTER_PORT      = 8000
+SCRAPE_INTERVAL    = 2
 LLM_STATS_INTERVAL = 5
 
 LLM_ENGINE_INFO = Gauge(
@@ -31,12 +31,6 @@ LLM_VRAM_BYTES = Gauge(
     ['engine']
 )
 
-def get_metric_value(metric_name: str) -> float:
-    for metric in REGISTRY.collect():
-        if metric.name == metric_name:
-            for sample in metric.samples:
-                return sample.value
-    return 0.0
 
 def main():
     log.info("Initializing GPU handle via NVML...")
@@ -60,35 +54,38 @@ def main():
 
     log.info("Entering metric collection loop...")
 
-    cycle_counter = 0
-    discovered_engines_cache = {}
+    cycle_counter             = 0
+    discovered_engines_cache  = {}
 
     while True:
+        cycle_start = time.monotonic()
+
         try:
+            # --- Fast path: hardware collectors ---
             gpu.collect()
             cpu.collect()
             ram.collect()
             storage.collect()
 
-            gpu_pct       = get_metric_value('gpu_utilization_percent')
-            session, game = classifier.collect(gpu_pct)
+            # Values read directly from in-memory state, not from REGISTRY
+            gpu_util_pct  = gpu.get_utilization()
+            session, game = classifier.collect(gpu_util_pct)
 
             gpu_power_w = gpu.get_power_w()
-            cpu_power_w = get_metric_value('cpu_power_watts_estimated')
+            cpu_power_w = cpu.get_power_w()
 
             energy.collect(session=session, gpu_power_w=gpu_power_w, cpu_power_w=cpu_power_w)
 
-            price_eur_kwh = get_metric_value('energy_price_euro_per_kwh')
-            total_power_w = get_metric_value('power_total_watts_estimated')
+            total_power_w = energy.get_total_power_w()
+            price_eur_kwh = energy.get_price()
 
             llm_proxy.update_power(total_power_w, price_eur_kwh)
             gaming_session.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, game=game)
-
             llm_stats.collect(power_w=total_power_w, price_eur_kwh=price_eur_kwh, session=session)
 
-            # LLM Discovery - fast scan
+            # --- LLM discovery: process scan (fast, no HTTP) ---
             active_providers = discover_active_llms()
-            current_engines = set()
+            current_engines  = set()
 
             for provider in active_providers:
                 engine = provider.ENGINE_NAME
@@ -99,7 +96,7 @@ def main():
                     cycle_counter = LLM_STATS_INTERVAL
 
                 cached_model = discovered_engines_cache.get(engine, {}).get('model', 'unknown')
-                cached_port = discovered_engines_cache.get(engine, {}).get('port', str(provider.port))
+                cached_port  = discovered_engines_cache.get(engine, {}).get('port', str(provider.port))
                 LLM_ENGINE_INFO.labels(
                     engine=engine,
                     model=cached_model,
@@ -111,21 +108,17 @@ def main():
                 if old_engine not in current_engines:
                     cached = discovered_engines_cache[old_engine]
                     try:
-                        LLM_ENGINE_INFO.remove(
-                            old_engine,
-                            cached.get('model', 'unknown'),
-                            cached.get('port', '')
-                        )
+                        LLM_ENGINE_INFO.remove(old_engine, cached.get('model', 'unknown'), cached.get('port', ''))
                     except KeyError:
                         pass
                     try:
                         LLM_VRAM_BYTES.remove(old_engine)
                     except KeyError:
                         pass
-                    log.info(f"LLM Engine '{old_engine}' terminated. Metrics cleared.")
+                    log.info(f"LLM engine '{old_engine}' terminated. Metrics cleared.")
                     del discovered_engines_cache[old_engine]
 
-            # LLM API stats - slow poll every ~10s
+            # --- LLM API stats: slow poll (HTTP, every ~10 s) ---
             cycle_counter += 1
             if cycle_counter >= LLM_STATS_INTERVAL:
                 cycle_counter = 0
@@ -133,11 +126,11 @@ def main():
                     engine = provider.ENGINE_NAME
                     try:
                         model_name = provider.get_active_model() or "unknown"
-                        stats = provider.get_stats()
+                        stats      = provider.get_stats()
 
                         old_model = discovered_engines_cache.get(engine, {}).get('model', 'unknown')
-                        old_port = discovered_engines_cache.get(engine, {}).get('port', '')
-                        if old_model != model_name or old_port != str(provider.port):
+                        old_port  = discovered_engines_cache.get(engine, {}).get('port', '')
+                        if old_model \!= model_name or old_port \!= str(provider.port):
                             try:
                                 LLM_ENGINE_INFO.remove(engine, old_model, old_port)
                             except KeyError:
@@ -145,7 +138,7 @@ def main():
 
                         discovered_engines_cache[engine] = {
                             'model': model_name,
-                            'port': str(provider.port)
+                            'port':  str(provider.port)
                         }
 
                         LLM_ENGINE_INFO.labels(
@@ -154,14 +147,13 @@ def main():
                             port=str(provider.port)
                         ).set(1)
 
-                        vram = stats.get("llm_vram_bytes", 0)
-                        LLM_VRAM_BYTES.labels(engine=engine).set(vram)
+                        LLM_VRAM_BYTES.labels(engine=engine).set(stats.get("llm_vram_bytes", 0))
 
                     except Exception as e:
                         log.error(f"Error fetching API stats for {engine}: {e}")
 
             log.info(
-                f"session: {session:6s} | gpu: {gpu_pct:.1f}% | "
+                f"session: {session:6s} | gpu: {gpu_util_pct:.1f}% | "
                 f"power: {total_power_w:.1f}W | "
                 f"llm_engines: {len(current_engines)} | "
                 f"collectors: OK"
@@ -170,7 +162,9 @@ def main():
         except Exception as e:
             log.error(f"Collection error: {e}")
 
-        time.sleep(SCRAPE_INTERVAL)
+        # Compensated sleep: subtract execution time to keep interval stable
+        elapsed = time.monotonic() - cycle_start
+        time.sleep(max(0.0, SCRAPE_INTERVAL - elapsed))
 
 
 if __name__ == '__main__':
