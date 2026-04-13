@@ -1,0 +1,12 @@
+# .gitattributes
+# Enforce LF line endings for all text files.
+# Prevents CRLF/LF inconsistencies when editing on Windows.
+
+* text=auto eol=lf
+
+# Explicitly mark binary files as binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.gz binary
+*.zip binary

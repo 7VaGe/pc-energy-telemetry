@@ -18,6 +18,7 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.out-of-order.time-window=10m'
     networks:
       - telemetry
 
