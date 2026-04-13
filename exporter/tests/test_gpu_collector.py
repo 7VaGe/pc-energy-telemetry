@@ -52,6 +52,8 @@ def _reset_gpu_state():
     gpu_module._energy_counter_supported = False
     gpu_module._prev_energy_mj           = None
     gpu_module._prev_collect_time        = None
+    gpu_module._best_w                   = 0.0
+    gpu_module._utilization              = 0.0
 
 
 def _get_gauge(name):
@@ -191,7 +193,7 @@ class TestCollectTDPFallback(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests: get_power_w()
+# Tests: get_power_w() and get_utilization()
 # ---------------------------------------------------------------------------
 class TestGetPowerW(unittest.TestCase):
 
@@ -200,17 +202,21 @@ class TestGetPowerW(unittest.TestCase):
         self.pynvml = sys.modules['pynvml']
         self.pynvml.nvmlDeviceGetPowerManagementLimit.return_value = 360_000
 
-    def test_returns_tdp_estimate_before_first_collect(self):
+    def test_returns_zero_before_any_collect(self):
+        # _best_w starts at 0.0; get_power_w() reads it directly (no REGISTRY scan)
+        self.assertEqual(gpu_module.get_power_w(), 0.0)
+
+    def test_returns_tdp_estimate_after_first_collect(self):
+        # After first collect, no delta yet -> best_w = TDP estimate
         self.pynvml.nvmlDeviceGetTotalEnergyConsumption.side_effect = None
         self.pynvml.nvmlDeviceGetTotalEnergyConsumption.return_value = 100_000
         self.pynvml.nvmlDeviceGetUtilizationRates.return_value = MagicMock(gpu=30)
         gpu_module.init()
-        # _prev_collect_time is None -> falls back to TDP: 360 * 0.30 = 108W
+        with patch('collectors.gpu.time') as mock_time:
+            mock_time.perf_counter.return_value = 0.0
+            gpu_module.collect()
+        # TDP * 30% = 360 * 0.30 = 108W
         self.assertAlmostEqual(gpu_module.get_power_w(), 108.0)
-
-    def test_returns_zero_when_handle_is_none(self):
-        gpu_module._handle = None
-        self.assertEqual(gpu_module.get_power_w(), 0.0)
 
     def test_returns_measured_after_two_collects(self):
         # init() calls GetTotalEnergyConsumption once for the probe:
@@ -227,6 +233,17 @@ class TestGetPowerW(unittest.TestCase):
             gpu_module.collect()
 
         self.assertAlmostEqual(gpu_module.get_power_w(), 58.0, places=1)
+
+    def test_get_utilization_reflects_collect(self):
+        # get_utilization() reads _utilization set by collect()
+        self.pynvml.nvmlDeviceGetTotalEnergyConsumption.side_effect = None
+        self.pynvml.nvmlDeviceGetTotalEnergyConsumption.return_value = 100_000
+        self.pynvml.nvmlDeviceGetUtilizationRates.return_value = MagicMock(gpu=75)
+        gpu_module.init()
+        with patch('collectors.gpu.time') as mock_time:
+            mock_time.perf_counter.return_value = 0.0
+            gpu_module.collect()
+        self.assertEqual(gpu_module.get_utilization(), 75.0)
 
 
 if __name__ == '__main__':

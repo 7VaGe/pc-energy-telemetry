@@ -38,6 +38,11 @@ _energy_counter_supported    = False
 _prev_energy_mj              = None
 _prev_collect_time           = None
 
+# In-memory state exposed directly by get_power_w() and get_utilization()
+# -- avoids REGISTRY.collect() reads in the hot path.
+_best_w        = 0.0   # best available GPU power (measured or estimated)
+_utilization   = 0.0   # last GPU utilisation percent
+
 
 def init() -> bool:
     # Initialize NVML, acquire GPU handle, probe energy counter availability.
@@ -61,7 +66,7 @@ def init() -> bool:
 
 
 def collect():
-    global _prev_energy_mj, _prev_collect_time
+    global _prev_energy_mj, _prev_collect_time, _best_w, _utilization
 
     if _handle is None:
         return
@@ -76,7 +81,7 @@ def collect():
     gpu_power_estimated.set(tdp_estimate_w)
 
     # --- Energy counter measurement ---
-    measured_w    = 0.0
+    measured_w     = 0.0
     measured_valid = False
     if _energy_counter_supported:
         now_s     = time.perf_counter()
@@ -99,6 +104,10 @@ def collect():
     best_w = measured_w if measured_valid else tdp_estimate_w
     gpu_power_watts.set(best_w)
 
+    # Update in-memory state for get_power_w() / get_utilization()
+    _best_w      = best_w
+    _utilization = float(utilization.gpu)
+
     gpu_utilization.set(utilization.gpu)
     gpu_memory_used.set(memory.used   / 1024 / 1024)
     gpu_memory_total.set(memory.total / 1024 / 1024)
@@ -107,18 +116,15 @@ def collect():
 
 
 def get_power_w() -> float:
-    # Returns the best available GPU power reading for energy.py.
-    # Falls back to TDP estimate on the first cycle (no prior delta yet).
-    if _energy_counter_supported and _prev_collect_time is not None:
-        from prometheus_client import REGISTRY
-        for metric in REGISTRY.collect():
-            if metric.name == 'gpu_power_watts_measured':
-                for sample in metric.samples:
-                    return sample.value
-    if _handle is not None:
-        utilization = pynvml.nvmlDeviceGetUtilizationRates(_handle)
-        return _tdp_watts * (utilization.gpu / 100.0)
-    return 0.0
+    # Returns the best available GPU power for energy.py.
+    # Reads from in-memory state set by collect() -- no REGISTRY scan.
+    return _best_w
+
+
+def get_utilization() -> float:
+    # Returns the last GPU utilization percent for the classifier.
+    # Reads from in-memory state set by collect() -- no REGISTRY scan.
+    return _utilization
 
 
 def shutdown():

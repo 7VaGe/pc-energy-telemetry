@@ -19,7 +19,13 @@ cpu_freq_max         = Gauge('cpu_freq_max_mhz',          'Maximum CPU clock fre
 # AMD Ryzen 7 7800X3D rated TDP
 CPU_TDP_WATTS = 120.0
 
+# In-memory state exposed directly by get_power_w()
+_power_w = 0.0
+
+
 def collect():
+    global _power_w
+
     utilization     = psutil.cpu_percent(interval=None)
     per_core        = psutil.cpu_percent(interval=None, percpu=True)
     freq            = psutil.cpu_freq()
@@ -29,6 +35,9 @@ def collect():
     cpu_power_estimated.set(estimated_power)
     cpu_tdp.set(CPU_TDP_WATTS)
 
+    # Update in-memory state for get_power_w()
+    _power_w = estimated_power
+
     if freq:
         cpu_freq_current.set(freq.current)
         cpu_freq_max.set(freq.max)
@@ -36,3 +45,9 @@ def collect():
     # Expose individual core utilization with a 'core' label
     for i, core_pct in enumerate(per_core):
         cpu_utilization_core.labels(core=str(i)).set(core_pct)
+
+
+def get_power_w() -> float:
+    # Returns the last estimated CPU power for energy.py.
+    # Reads from in-memory state set by collect() -- no REGISTRY scan.
+    return _power_w

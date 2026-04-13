@@ -42,7 +42,12 @@ TARIFF = {
     'F3': 0.16,
 }
 
-_prev_time = None
+_prev_time    = None
+
+# In-memory state exposed directly by get_total_power_w() / get_price()
+_total_power_w   = 0.0
+_price_eur_kwh   = TARIFF['F1']
+
 
 def _get_tariff_band() -> tuple[str, float]:
     # Determine the active Italian tariff band based on current time.
@@ -67,13 +72,15 @@ def _get_tariff_band() -> tuple[str, float]:
         return 'F2', TARIFF['F2']
     return 'F3', TARIFF['F3']
 
+
 def collect(session: str, gpu_power_w: float, cpu_power_w: float):
     # Called every scrape cycle.
     # session:     current session type ('idle', 'gaming', 'llm')
-    # gpu_power_w: estimated GPU power in Watts
+    # gpu_power_w: GPU power in Watts (from energy counter or TDP estimate)
     # cpu_power_w: estimated CPU power in Watts
 
-    global _prev_time
+    global _prev_time, _total_power_w, _price_eur_kwh
+
     now = time.time()
 
     if _prev_time is None:
@@ -94,6 +101,10 @@ def collect(session: str, gpu_power_w: float, cpu_power_w: float):
     tariff_active.set({'F1': 1, 'F2': 2, 'F3': 3}[band])
     price_active_euro.set(price)
 
+    # Update in-memory state for get_total_power_w() / get_price()
+    _total_power_w = total_w
+    _price_eur_kwh = price
+
     energy_total_kwh.inc(delta_kwh)
     cost_total_euro.inc(delta_euro)
 
@@ -106,3 +117,15 @@ def collect(session: str, gpu_power_w: float, cpu_power_w: float):
     else:
         energy_idle_kwh.inc(delta_kwh)
         cost_idle_euro.inc(delta_euro)
+
+
+def get_total_power_w() -> float:
+    # Returns the last computed total system power for downstream consumers.
+    # Reads from in-memory state set by collect() -- no REGISTRY scan.
+    return _total_power_w
+
+
+def get_price() -> float:
+    # Returns the active tariff price (EUR/kWh) for downstream consumers.
+    # Reads from in-memory state set by collect() -- no REGISTRY scan.
+    return _price_eur_kwh
