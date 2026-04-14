@@ -1,4 +1,12 @@
 # classifier.py
+# Session classifier: detects current workload type (idle / gaming / llm).
+#
+# Process name matching is cross-platform:
+#   - Names are normalized to lowercase without .exe extension before lookup
+#   - GAMING_PROCESSES in collectors/__init__.py stores base names (no extension)
+#   - LLM process detection uses both exact names and cmdline keyword scan
+
+import platform
 import psutil
 from prometheus_client import Gauge, Enum
 from collectors import GAMING_PROCESSES, GAMING_GPU_THRESHOLD
@@ -13,34 +21,46 @@ session_type_numeric = Gauge(
     'Session type as integer (0=idle, 1=gaming, 2=llm)'
 )
 
-LLM_PROCESSES        = {'ollama.exe', 'ollama_llama_server.exe', 'llama-server.exe', 'llama-cpp.exe'}
-LLM_PROCESSES_UI     = {'lm studio.exe'}
-LLM_CMDLINE_KEYWORDS = {'ollama', 'llama', 'llm', 'transformers', 'vllm'}
-GPU_IDLE_THRESHOLD   = 8.0
+# LLM runtime process names — stored without .exe for cross-platform matching
+_LLM_PROCESSES = {
+    'ollama', 'ollama_llama_server', 'llama-server', 'llama-cpp',
+    'lm studio', 'lmstudio',
+}
+_LLM_CMDLINE_KEYWORDS = {'ollama', 'llama', 'llm', 'transformers', 'vllm', 'lmstudio'}
+GPU_IDLE_THRESHOLD    = 8.0   # % GPU utilization below which session is idle
 
 
-def _get_active_processes():
-    names, cmdlines = set(), []
+def _normalize(name: str) -> str:
+    """Lowercase and strip .exe suffix for cross-platform name comparison."""
+    return name.lower().removesuffix(".exe")
+
+
+def _get_active_processes() -> tuple[set[str], list[str]]:
+    """Return (normalized_names, cmdlines)."""
+    names: set[str]   = set()
+    cmdlines: list[str] = []
+
     for proc in psutil.process_iter(['name', 'cmdline']):
         try:
-            name = proc.info['name']
-            if name:
-                names.add(name.lower())
+            raw_name = proc.info['name']
+            if raw_name:
+                names.add(_normalize(raw_name))
             cmdline = proc.info['cmdline']
             if cmdline:
                 cmdlines.append(' '.join(cmdline).lower())
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+
     return names, cmdlines
 
 
 def collect(gpu_utilization_pct: float) -> tuple[str, str]:
     """
-    Classifica la sessione corrente.
+    Classify current session type.
     Returns:
         (session_type, detected_game)
-        session_type: 'idle' | 'gaming' | 'llm'
-        detected_game: nome del processo gioco rilevato, '' se nessuno
+        session_type : 'idle' | 'gaming' | 'llm'
+        detected_game: normalized process name of detected game, '' if none
     """
     detected_game = ''
 
@@ -49,13 +69,15 @@ def collect(gpu_utilization_pct: float) -> tuple[str, str]:
     else:
         names, cmdlines = _get_active_processes()
 
-        is_llm = (any(p in names for p in LLM_PROCESSES) or
-                  any(p in names for p in LLM_PROCESSES_UI) or
-                  any(any(kw in c for kw in LLM_CMDLINE_KEYWORDS) for c in cmdlines))
+        is_llm = (
+            bool(_LLM_PROCESSES & names) or
+            any(any(kw in c for kw in _LLM_CMDLINE_KEYWORDS) for c in cmdlines)
+        )
 
         if is_llm:
             result = 'llm'
         else:
+            # GAMING_PROCESSES contains base names (no .exe) for cross-platform match
             for name in names:
                 if name in GAMING_PROCESSES:
                     detected_game = name

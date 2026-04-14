@@ -6,6 +6,7 @@
 # duplicate-registration errors from module-level Gauge declarations).
 
 import unittest
+from unittest.mock import patch
 import collectors.hardware_profile as hw_module
 from prometheus_client import REGISTRY
 
@@ -64,8 +65,22 @@ class TestComponentConstants(unittest.TestCase):
 
 # ---------------------------------------------------------------------------
 # Tests: init() formula and gauge publication
+#
+# All tests in this class pin _is_original_hardware() to True so that
+# the validated constants are always used, regardless of the test runner's
+# actual CPU. This keeps assertions deterministic across environments.
 # ---------------------------------------------------------------------------
 class TestBaselineFormula(unittest.TestCase):
+
+    def setUp(self):
+        self._patcher = patch(
+            'collectors.hardware_profile._is_original_hardware',
+            return_value=True
+        )
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
 
     def test_init_returns_positive_float(self):
         total = hw_module.init()
