@@ -33,12 +33,15 @@ LLM_VRAM_BYTES = Gauge(
 
 
 def main():
-    log.info("Initializing GPU handle via NVML...")
-    energy_counter_ok = gpu.init()
-    if energy_counter_ok:
-        log.info("GPU handle acquired. Power method: energy counter (nvmlDeviceGetTotalEnergyConsumption).")
+    log.info("Selecting GPU power provider...")
+    gpu_measured = gpu.init()
+    if gpu_measured:
+        log.info("GPU power: direct measurement active.")
     else:
-        log.warning("GPU handle acquired. Power method: TDP*utilization estimate (energy counter not supported).")
+        log.warning("GPU power: TDP*utilization estimate active (no direct sensor available).")
+
+    log.info("Selecting CPU power provider...")
+    cpu.init()
 
     log.info("Detecting hardware profile and computing baseline power...")
     baseline = hardware_profile.init()
